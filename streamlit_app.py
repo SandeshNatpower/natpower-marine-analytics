@@ -9,6 +9,17 @@ st.set_page_config(
     page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
 )
 
+st.write('started')
+# Initialize connection.
+conn = st.connection("postgresql", type="sql")
+
+# Perform query.
+df = conn.query('SELECT * FROM public.core_vessel limit 10;', ttl="10m")
+
+# Print results.
+for row in df.itertuples():
+    st.write(f"{row.name} has a :{row.pet}:")
+
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
 

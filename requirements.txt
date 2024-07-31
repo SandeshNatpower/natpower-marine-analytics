@@ -1,2 +1,9 @@
 streamlit
 pandas
+psycopg2
+flask
+flask_restful
+scipy
+flask_sqlalchemy
+psycopg2-binary
+sqlalchemy
