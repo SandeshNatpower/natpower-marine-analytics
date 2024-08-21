@@ -19,7 +19,7 @@ conn = st.connection("postgresql", type="sql")
 
 # Perform query.
 df = conn.query("select count(vessel_id) from public.core_vessel;", ttl="10m")
-st.write(f'Total Number of Vessel Counts - {df['count'][0]} ')
+st.write(f"Total Number of Vessel Counts - {df['count'][0]} ")
 
 col1, col2 = st.columns(2)
 with col1:
