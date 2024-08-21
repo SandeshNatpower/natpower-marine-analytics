@@ -11,5 +11,5 @@
 2. Run the app
 
    ```
-   $ streamlit run Natpower_Marine.py
+   $ streamlit run streamlit_app.py
    ```
