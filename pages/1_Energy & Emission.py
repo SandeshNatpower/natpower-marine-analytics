@@ -523,3 +523,88 @@ ax.legend(title='Vessel Category')
 st.pyplot(fig)
 
 ###################################################################################
+st.title('Future Forecast')
+
+# Extract unique vessel categories
+categories = df_main['new_vessel_category'].unique()
+
+# Format categories for SQL query
+formatted_categories = ",".join([f"'{cat}'" for cat in categories])
+
+df = conn.query(f"SELECT * FROM public.ref_future_power_consumption where year between 2024 and 2070 and change_type in('Low','Medium','High',{formatted_categories});", ttl="10m")
+df['year'] = pd.to_datetime(df['year'], format='%Y')
+df['year_val'] = df['year']
+df.set_index('year', inplace=True)
+# Set up columns in Streamlit
+
+col1, col2, col3, col4 = st.columns(4)
+
+# Cold Ironing chart
+with col1:
+    st.write("Cold Ironing")
+    pivot_df = df[df['type'] == 'Cold Ironing'].pivot( columns='change_type', values='change_in_percentage')
+    st.dataframe(pivot_df)
+    st.line_chart(pivot_df)
+
+# Propulsion Adoption chart
+with col2:
+    st.write("Propulsion Adoption")
+    pivot_df = df[df['type'] == 'Propulsion Adoption'].pivot( columns='change_type', values='change_in_percentage')
+    st.dataframe(pivot_df)
+    st.line_chart(pivot_df)
+
+# Propulsion Distance chart
+with col3:
+    st.write("Propulsion Distance")
+    pivot_df = df[df['type'] == 'Propulsion Distance'].pivot( columns='change_type', values='change_in_percentage')
+    st.dataframe(pivot_df)
+    st.line_chart(pivot_df)
+
+# Traffic Forecast chart
+with col4:
+    st.write("Traffic Forecast")
+    pivot_df = df[df['type'] == 'Traffic Forecast'].pivot( columns='change_type', values='change_in_percentage')
+    st.dataframe(pivot_df)
+    st.line_chart(pivot_df)
+
+df_extracted = df_main
+df_extracted['key'] = 1
+df['key'] = 1
+
+merged_df = pd.merge(df_extracted, df, on='key').drop('key', axis=1)
+
+traffic = df[df['type'] == 'Traffic Forecast']
+traffic['traffic'] = traffic['change_in_percentage']
+traffic= traffic[['traffic','year_val']]
+
+merged_df = pd.merge(merged_df, traffic, on='year_val')
+
+merged_df['new_cold_ironing_mw_vessel'] = merged_df['cold_ironing_mw'] * ((1 + merged_df['traffic'])/100 )
+merged_df['change_cold_ironing_mw_vessel'] = (merged_df['change_in_percentage']/100) * ( merged_df['cold_ironing_mw'] * ((1 + merged_df['traffic'])/100 ))
+merged_df['new_propulsion_consumption'] = merged_df['propulsion_consumption_mw'] * (1 + merged_df['traffic']/100 )
+merged_df['change_propulsion_consumption'] = (merged_df['change_in_percentage']/100) * ( merged_df['propulsion_consumption_mw'] * ((1 + merged_df['traffic'])/100 ))
+
+merged_df['year'] = merged_df['year_val']
+merged_df.set_index('year', inplace=True)
+
+# st.dataframe(merged_df)
+
+st.write("Cold Ironing - Future Forecast")
+pivot_df =merged_df[merged_df['type'] == 'Cold Ironing'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+# st.dataframe(pivot_df)
+st.line_chart(pivot_df)
+
+st.write("Propulsion Adoption - Future Forecast")
+pivot_df =merged_df[merged_df['type'] == 'Propulsion Adoption'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+# st.dataframe(pivot_df)
+st.line_chart(pivot_df)
+
+st.write("Propulsion Distance - Future Forecast")
+pivot_df =merged_df[merged_df['type'] == 'Propulsion Distance'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+# st.dataframe(pivot_df)
+st.line_chart(pivot_df)
+
+st.write("Traffic Forecast - Future Forecast")
+pivot_df =merged_df[merged_df['type'] == 'Traffic Forecast'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+# st.dataframe(pivot_df)
+st.line_chart(pivot_df)

@@ -238,6 +238,12 @@ for index, row in df.iterrows():
         propulsion_selected = True
         df.at[index, 'Selection'] = True
 
+# Initialize session state
+if 'prev_auxiliary_idx' not in st.session_state:
+    st.session_state.prev_auxiliary_idx = None
+if 'prev_propulsion_idx' not in st.session_state:
+    st.session_state.prev_propulsion_idx = None
+
 col1, col2 = st.columns(2)
 with col1:
     if 'prev_auxiliary_idx' not in st.session_state:
@@ -247,28 +253,39 @@ with col1:
     st.session_state.emission_df = emission_df
     
 with col2:
-    # Filter for selected rows
-    selected_auxiliary = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Auxiliary')]['values_g_per_kwh'].iloc[0]
+   # Initialize selection variables
+    selected_auxiliary_value = None
+    selected_propulsion_value = None
 
-    if selected_auxiliary != '':
-        # Get the index of the currently selected auxiliary
-        current_auxiliary_idx = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Auxiliary')]['values_g_per_kwh'].index[0]
+    # Check if any Auxiliary is selected
+    aux_selection = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Auxiliary')]
+    if not aux_selection.empty:
+        selected_auxiliary_value = aux_selection['values_g_per_kwh'].iloc[0]
+        current_auxiliary_idx = aux_selection.index[0]
 
-        # If a new auxiliary is selected, deselect the previous one
+        # Unselect the previous Auxiliary if a new one is selected
         if st.session_state.prev_auxiliary_idx is not None and st.session_state.prev_auxiliary_idx != current_auxiliary_idx:
             emission_df.at[st.session_state.prev_auxiliary_idx, 'Selection'] = False
 
-        # Update the previous auxiliary index
+        # Update session state for Auxiliary
         st.session_state.prev_auxiliary_idx = current_auxiliary_idx
 
-        # Highlight the selected auxiliary in yellow
-        emission_df.loc[emission_df.index == current_auxiliary_idx, 'highlight'] = 'background-color: yellow;'
-    # Show the updated DataFrame in data_editor with the updated selections
-    emission_df = st.data_editor(emission_df, disabled=['engine_group', 'pollutant_name', 'fuel_type', 'engine_type', 'emission_factor_formula'])
+    # Check if any Propulsion is selected
+    prop_selection = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Propulsion')]
+    if not prop_selection.empty:
+        selected_propulsion_value = prop_selection['values_g_per_kwh'].iloc[0]
+        current_propulsion_idx = prop_selection.index[0]
 
-    st.write(selected_auxiliary)
-    selected_propulsion = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Propulsion')]['values_g_per_kwh'].iloc[0]
-    st.write(selected_propulsion)
+        # Unselect the previous Propulsion if a new one is selected
+        if st.session_state.prev_propulsion_idx is not None and st.session_state.prev_propulsion_idx != current_propulsion_idx:
+            emission_df.at[st.session_state.prev_propulsion_idx, 'Selection'] = False
+
+        # Update session state for Propulsion
+        st.session_state.prev_propulsion_idx = current_propulsion_idx
+
+    # Display selected values
+    st.write("Selected Auxiliary Value:", selected_auxiliary_value if selected_auxiliary_value is not None else "None")
+    st.write("Selected Propulsion Value:", selected_propulsion_value if selected_propulsion_value is not None else "None")
 
 
 def co2_change_val():
