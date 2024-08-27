@@ -10,3 +10,6 @@ leafmap
 geopandas
 folium
 streamlit-folium
+matplotlib
+fpdf
+pillow

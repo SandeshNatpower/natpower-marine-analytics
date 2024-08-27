@@ -6,9 +6,11 @@ import psycopg2
 from sqlalchemy import create_engine, text
 
 # Set the title and favicon that appear in the Browser's tab bar.
+
 st.set_page_config(
     page_title='MARINE dashboard',
     page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    layout='wide',
 )
 
 st.image("images/LinkedIn Header - NatPower Marine.png", caption='© Natpower Marine', use_column_width=True)

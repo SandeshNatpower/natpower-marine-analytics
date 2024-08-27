@@ -132,17 +132,23 @@ def generate_default_data(num_vessels, num_terminals, num_berths, port_dwell_tim
                     "Berth_Docking_Time": (berth_departure - berth_arrival).total_seconds() / 3600 ,
                     "average_hoteling_MW" : average_hoteling_kw/1000,
                     "propulsion_consumption_MW": propulsion_consumption,
+                    "Total_energy_consumption": average_hoteling_kw/1000 + propulsion_consumption,
                     "average_hoteling_MW/h" : average_hoteling_kw/1000 * (berth_departure - berth_arrival).total_seconds() / 3600,
                     "propulsion_consumption_mw/h": propulsion_consumption * (berth_arrival - prev_berth_departure).total_seconds() / 3600,
+                    "Total_energy_consumption_mw/h": (average_hoteling_kw/1000 * (berth_departure - berth_arrival).total_seconds() / 3600 ) + (propulsion_consumption * (berth_arrival - prev_berth_departure).total_seconds() / 3600),
                 })
                 index += 1
                 # Increment the vessel start time for the next berth
                 vessel_start_time = berth_departure + timedelta(minutes=port_dwell_time)
-                prev_berth_departure = berth_departure
+                prev_berth_departure = berth_departure#
+                print(data)
     return pd.DataFrame(data)
 
 # Generate default DataFrame
 default_df = generate_default_data(num_vessels, num_terminals, num_berths,port_dwell_time,port_dock_time)
+st.title('Data Generated')
+st.dataframe(default_df)
+st.session_state.default_df = default_df
 
 # Initialize the default DataFrame in the session state if it doesn't exist
 if 'default_df' not in st.session_state:
@@ -150,10 +156,14 @@ if 'default_df' not in st.session_state:
 
 # Function to update the values based on edits
 def change_val():
+    st.session_state.default_df = default_df
+    st.session_state.edited_df = edited_df
     df = st.session_state.edited_df.copy()  # Work with a copy to avoid in-place modifications
     df['Berth_Docking_Time'] = (df['Berth_Departure'] - df['Berth_Arrival']) / pd.Timedelta(hours=1)
     df['average_hoteling_MW/h'] = df['average_hoteling_MW'] * df['Berth_Docking_Time']
     df['propulsion_consumption_mw/h'] = df['propulsion_consumption_MW'] * df['Port_Dwelling_Time']
+    df["Total_energy_consumption"] =  df['average_hoteling_MW'] + df['propulsion_consumption_MW']
+    df["Total_energy_consumption_mw/h"] =  df['average_hoteling_MW/h'] + df['propulsion_consumption_mw/h']
     
     # Update the session state with the modified DataFrame
     st.session_state.edited_df = df
@@ -175,6 +185,7 @@ if 'edited_df' not in st.session_state:
 else:
     # If already stored, update it to reflect changes
     st.session_state.edited_df = edited_df
+    st.session_state.default_df = default_df
 
 # Manually trigger the calculation function
 change_val()
@@ -193,6 +204,85 @@ st.title('After Calculation')
 # Apply the highlighting and display the DataFrame
 styled_df = st.session_state.edited_df.style.apply(highlight_changes, axis=1)
 st.write(styled_df)
+new_df = styled_df.data
+
+columns_list =['Port_Dwelling_Time', 'Berth_Docking_Time', 'average_hoteling_MW/h',
+                      'propulsion_consumption_mw/h', 'Total_energy_consumption', 'Total_energy_consumption_mw/h']
+
+# Calculate the average (mean) of the specified columns
+mean_values = new_df[columns_list].mean()
+
+# Calculate the sum of the specified columns
+sum_values = new_df[columns_list].sum()
+
+# Combine the mean and sum into a new DataFrame
+result_df = pd.DataFrame({
+    'Average Value': mean_values,
+    'Total Value': sum_values
+})
+
+st.dataframe(result_df)
+
+# Emission
+st.title('Emission Calculator')
+df = conn.query(f"SELECT engine_group, pollutant_name, fuel_type, engine_type, emission_factor_formula, values_g_per_kwh FROM reporting.ref_emission_factors where pollutant_name = 'CO2';", ttl="10m")
+df['Selection'] = False
+
+auxiliary_selected = False
+propulsion_selected = False
+for index, row in df.iterrows():
+    if row['engine_group'] == 'Auxiliary' and not auxiliary_selected:
+        df.at[index, 'Selection'] = True
+        auxiliary_selected = True  # Mark auxiliary as selected
+    elif row['engine_group'] == 'Propulsion'and not propulsion_selected:
+        propulsion_selected = True
+        df.at[index, 'Selection'] = True
+
+col1, col2 = st.columns(2)
+with col1:
+    if 'prev_auxiliary_idx' not in st.session_state:
+        st.session_state.prev_auxiliary_idx = None
+        
+    emission_df = st.data_editor(df,disabled=('engine_group', 'pollutant_name', 'fuel_type', 'engine_type', 'emission_factor_formula'))
+    st.session_state.emission_df = emission_df
+    
+with col2:
+    # Filter for selected rows
+    selected_auxiliary = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Auxiliary')]['values_g_per_kwh'].iloc[0]
+
+    if selected_auxiliary != '':
+        # Get the index of the currently selected auxiliary
+        current_auxiliary_idx = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Auxiliary')]['values_g_per_kwh'].index[0]
+
+        # If a new auxiliary is selected, deselect the previous one
+        if st.session_state.prev_auxiliary_idx is not None and st.session_state.prev_auxiliary_idx != current_auxiliary_idx:
+            emission_df.at[st.session_state.prev_auxiliary_idx, 'Selection'] = False
+
+        # Update the previous auxiliary index
+        st.session_state.prev_auxiliary_idx = current_auxiliary_idx
+
+        # Highlight the selected auxiliary in yellow
+        emission_df.loc[emission_df.index == current_auxiliary_idx, 'highlight'] = 'background-color: yellow;'
+    # Show the updated DataFrame in data_editor with the updated selections
+    emission_df = st.data_editor(emission_df, disabled=['engine_group', 'pollutant_name', 'fuel_type', 'engine_type', 'emission_factor_formula'])
+
+    st.write(selected_auxiliary)
+    selected_propulsion = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Propulsion')]['values_g_per_kwh'].iloc[0]
+    st.write(selected_propulsion)
+
+
+def co2_change_val():
+    # Add code here to display the records
+    print('x')
+   
+
+def highlight_changes_co2(val):
+    original_val = st.session_state.emission_df.loc[val.name, val.index]
+    return ['background-color: yellow' if val[col] != original_val[col] else '' for col in val.index]
+
+
+# Manually trigger the calculation function
+co2_change_val()
 
 # Future Year Forecast
 st.title('Future Year Forecast')
