@@ -98,7 +98,7 @@ gdf = gpd.GeoDataFrame(df_loc, geometry='port_geometry')
 
 # Create a folium map centered around the first geometry
 if not gdf.empty:
-    m = folium.Map(location=[55, -3], zoom_start=5)  # Center map around the UK
+    m = folium.Map(location=[55, -3], zoom_start=5,use_column_width=True)  # Center map around the UK
 
     # Add each geometry to the map with different colors based on type
     for _, row in gdf.iterrows():       
@@ -290,6 +290,7 @@ with col2:
     st.write(str( (df_main['cold_ironing_mwh'].mean()) + (df_main['propulsion_consumption_mwh'].mean()) ))
 
 # CO2 Emission
+st.image("images/carbon emissions.png", caption='© Natpower Marine', use_column_width=True)
 st.title("CO2 Emission")
 co2_cold_ironing_sum_g = df_main['co2_cold_ironing_emission'].sum()
 co2_cold_ironing_mean_g = df_main['co2_cold_ironing_emission'].mean()
