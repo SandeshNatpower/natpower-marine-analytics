@@ -13,6 +13,8 @@ from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
 import tempfile
+pd.options.mode.chained_assignment = None  # default='warn'
+
 
 # Sample DataFrame (already provided)
 st.set_page_config(layout="wide")
@@ -573,39 +575,42 @@ df_extracted['key'] = 1
 df['key'] = 1
 
 merged_df = pd.merge(df_extracted, df, on='key').drop('key', axis=1)
+try:
+    traffic = df[df['type'] == 'Traffic Forecast']
+    traffic = traffic.copy()
+    traffic['traffic'] = traffic['change_in_percentage']
+    traffic= traffic[['traffic','year_val']]
 
-traffic = df[df['type'] == 'Traffic Forecast']
-traffic['traffic'] = traffic['change_in_percentage']
-traffic= traffic[['traffic','year_val']]
+    merged_df = pd.merge(merged_df, traffic, on='year_val')
 
-merged_df = pd.merge(merged_df, traffic, on='year_val')
+    merged_df['new_cold_ironing_mw_vessel'] = merged_df['cold_ironing_mw'] * ((1 + merged_df['traffic'])/100 )
+    merged_df['change_cold_ironing_mw_vessel'] = (merged_df['change_in_percentage']/100) * ( merged_df['cold_ironing_mw'] * ((1 + merged_df['traffic'])/100 ))
+    merged_df['new_propulsion_consumption'] = merged_df['propulsion_consumption_mw'] * (1 + merged_df['traffic']/100 )
+    merged_df['change_propulsion_consumption'] = (merged_df['change_in_percentage']/100) * ( merged_df['propulsion_consumption_mw'] * ((1 + merged_df['traffic'])/100 ))
 
-merged_df['new_cold_ironing_mw_vessel'] = merged_df['cold_ironing_mw'] * ((1 + merged_df['traffic'])/100 )
-merged_df['change_cold_ironing_mw_vessel'] = (merged_df['change_in_percentage']/100) * ( merged_df['cold_ironing_mw'] * ((1 + merged_df['traffic'])/100 ))
-merged_df['new_propulsion_consumption'] = merged_df['propulsion_consumption_mw'] * (1 + merged_df['traffic']/100 )
-merged_df['change_propulsion_consumption'] = (merged_df['change_in_percentage']/100) * ( merged_df['propulsion_consumption_mw'] * ((1 + merged_df['traffic'])/100 ))
+    merged_df['year'] = merged_df['year_val']
+    merged_df.set_index('year', inplace=True)
 
-merged_df['year'] = merged_df['year_val']
-merged_df.set_index('year', inplace=True)
+    # st.dataframe(merged_df)
 
-# st.dataframe(merged_df)
+    st.write("Cold Ironing - Future Forecast")
+    pivot_df =merged_df[merged_df['type'] == 'Cold Ironing'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+    # st.dataframe(pivot_df)
+    st.line_chart(pivot_df)
 
-st.write("Cold Ironing - Future Forecast")
-pivot_df =merged_df[merged_df['type'] == 'Cold Ironing'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
-# st.dataframe(pivot_df)
-st.line_chart(pivot_df)
+    st.write("Propulsion Adoption - Future Forecast")
+    pivot_df =merged_df[merged_df['type'] == 'Propulsion Adoption'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+    # st.dataframe(pivot_df)
+    st.line_chart(pivot_df)
 
-st.write("Propulsion Adoption - Future Forecast")
-pivot_df =merged_df[merged_df['type'] == 'Propulsion Adoption'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
-# st.dataframe(pivot_df)
-st.line_chart(pivot_df)
+    st.write("Propulsion Distance - Future Forecast")
+    pivot_df =merged_df[merged_df['type'] == 'Propulsion Distance'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+    # st.dataframe(pivot_df)
+    st.line_chart(pivot_df)
 
-st.write("Propulsion Distance - Future Forecast")
-pivot_df =merged_df[merged_df['type'] == 'Propulsion Distance'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
-# st.dataframe(pivot_df)
-st.line_chart(pivot_df)
-
-st.write("Traffic Forecast - Future Forecast")
-pivot_df =merged_df[merged_df['type'] == 'Traffic Forecast'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
-# st.dataframe(pivot_df)
-st.line_chart(pivot_df)
+    st.write("Traffic Forecast - Future Forecast")
+    pivot_df =merged_df[merged_df['type'] == 'Traffic Forecast'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+    # st.dataframe(pivot_df)
+    st.line_chart(pivot_df)
+except:
+    st.write("No data available for future forecast")
