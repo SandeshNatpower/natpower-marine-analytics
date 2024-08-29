@@ -13,3 +13,4 @@ streamlit-folium
 matplotlib
 fpdf
 pillow
+seaborn
