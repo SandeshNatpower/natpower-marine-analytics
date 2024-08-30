@@ -141,7 +141,6 @@ def generate_default_data(num_vessels, num_terminals, num_berths, port_dwell_tim
                 # Increment the vessel start time for the next berth
                 vessel_start_time = berth_departure + timedelta(minutes=port_dwell_time)
                 prev_berth_departure = berth_departure#
-                print(data)
     return pd.DataFrame(data)
 
 # Generate default DataFrame
