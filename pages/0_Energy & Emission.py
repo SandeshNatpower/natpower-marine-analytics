@@ -139,7 +139,7 @@ if not gdf.empty:
                 mvd.flag, mvd.callsign, mvd.dwt, mvd.gross_tonnage, mvd.build, 
 				mvd.average_hoteling_kw, mvd.propulsion_consumption, mvd.engine_type, mvd.engine_count, mvd.engine_value, mvd.engine_horsepower,
 				mvd.owner_name, mvd.operator_name,mvd.registered_owner,mvd.third_party_operator,mvd.technical_manager,mvd.ism_manager,
-                mvd.length_m,mvd.breadth_m   From reporting.get_port_energy_emission({df_loc['port_id'][0]}) t1 left join reporting.mview_vessel_details mvd on t1.vessel_id = mvd.vessel_id;"""
+                mvd.length_m,mvd.breadth_m   From reporting.get_port_energy_emission(ARRAY[{df_loc['port_id'][0]}]) t1 left join reporting.mview_vessel_details mvd on t1.vessel_id = mvd.vessel_id;"""
                 display_name = 'Port'
 
         elif st.session_state.terminal_level:
@@ -164,7 +164,7 @@ if not gdf.empty:
                 mvd.flag, mvd.callsign, mvd.dwt, mvd.gross_tonnage, mvd.build, 
 				mvd.average_hoteling_kw, mvd.propulsion_consumption, mvd.engine_type, mvd.engine_count, mvd.engine_value, mvd.engine_horsepower,
 				mvd.owner_name, mvd.operator_name,mvd.registered_owner,mvd.third_party_operator,mvd.technical_manager,mvd.ism_manager,
-                mvd.length_m,mvd.breadth_m   From reporting.get_terminal_energy_emission({df_loc['port_id'][0]},{df_loc['terminal_id'][0]}) t1 left join reporting.mview_vessel_details mvd on t1.vessel_id = mvd.vessel_id;"""
+                mvd.length_m,mvd.breadth_m   From reporting.get_terminal_energy_emission(ARRAY[{df_loc['port_id'][0]}],ARRAY[{df_loc['terminal_id'][0]}]) t1 left join reporting.mview_vessel_details mvd on t1.vessel_id = mvd.vessel_id;"""
                 display_name = 'Terminal'
 
         elif st.session_state.berth_level:
@@ -190,7 +190,7 @@ if not gdf.empty:
                 mvd.flag, mvd.callsign, mvd.dwt, mvd.gross_tonnage, mvd.build, 
 				mvd.average_hoteling_kw, mvd.propulsion_consumption, mvd.engine_type, mvd.engine_count, mvd.engine_value, mvd.engine_horsepower,
 				mvd.owner_name, mvd.operator_name,mvd.registered_owner,mvd.third_party_operator,mvd.technical_manager,mvd.ism_manager,
-                mvd.length_m,mvd.breadth_m    From reporting.get_berth_energy_emission({df_loc['port_id'][0]},{df_loc['terminal_id'][0]},{df_loc['berth_id'][0]}) t1 left join reporting.mview_vessel_details mvd on t1.vessel_id = mvd.vessel_id;"""
+                mvd.length_m,mvd.breadth_m    From reporting.get_berth_energy_emission(ARRAY[{df_loc['port_id'][0]}],ARRAY[{df_loc['terminal_id'][0]}],ARRAY[{df_loc['berth_id'][0]}]) t1 left join reporting.mview_vessel_details mvd on t1.vessel_id = mvd.vessel_id;"""
                 display_name = 'Berth'
 
         bounds = feature_shape.bounds  # (minx, miny, maxx, maxy)
@@ -208,7 +208,7 @@ else:
     st.write("No data available with the selected filters.")
 
 # df_main = conn.query(query_energy, ttl="10m")
-
+print(query)
 @st.cache_data(ttl="10m")
 def get_emission_data(query):
     return get_data(query)
