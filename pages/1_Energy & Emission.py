@@ -22,8 +22,19 @@ st.image("images/LinkedIn Header - NatPower Marine.png", caption='© Natpower Ma
 
 st.sidebar.image("images/natpowermarine.png", caption='© Natpower Marine', use_column_width=True)
 
-conn = st.connection("postgresql", type="sql")
-df = conn.query("SELECT DISTINCT country,port_name,terminal_name,berth_name,port_id,terminal_id,berth_id FROM reference.port_hierarchy;", ttl="10m")
+# Cached database connection and query execution
+@st.cache_resource(ttl="10m")
+def get_connection():
+    return st.connection("postgresql", type="sql")
+
+@st.cache_data(ttl="10m")
+def get_data(queryval):
+    return conn.query(queryval)
+
+conn = get_connection()
+
+queryval = "SELECT DISTINCT country, port_name, terminal_name, berth_name, port_id, terminal_id, berth_id FROM reference.port_hierarchy;"
+df = get_data(queryval)
 
 # Sidebar filters
 st.sidebar.header("Filter options - Port Selection Mandatory")
@@ -59,7 +70,7 @@ query = f"SELECT * FROM reference.port_hierarchy where country = '{country_optio
 
 terminal_options_list = df[(df['country'] == country_options) & (df['port_name'] == port_options)]["terminal_name"].unique().tolist()
 terminal_options_list.insert(0, None)
-terminal_options =  st.sidebar.selectbox("Select Terminal", options= terminal_options_list)
+terminal_options =  st.sidebar.selectbox("Select Terminal", options= terminal_options_list,index=1)
 
 def on_terminal_toggle():
     if st.session_state.terminal_level:
@@ -75,7 +86,7 @@ if terminal_options != None:
 # Filter by Port
 berth_options_list = df[(df['country'] == country_options) & (df['port_name'] == port_options) & (df['terminal_name'] == terminal_options) ]["berth_name"].unique().tolist()
 berth_options_list.insert(0, None)
-berth_options =  st.sidebar.selectbox("Select Berth", options=berth_options_list)
+berth_options =  st.sidebar.selectbox("Select Berth", options=berth_options_list,index=1)
 
 def on_berth_toggle():
     if st.session_state.berth_level:
@@ -87,16 +98,19 @@ if berth_options != None:
     color = 'blue'
     query = f"SELECT * FROM reference.port_hierarchy where country = '{country_options}' and port_name = '{port_options}' and terminal_name = '{terminal_options}' and berth_name = '{berth_options}';"
 
-df_loc = conn.query(query, ttl="10m")
+df_loc = get_data(query)
 
 # # Convert the 'geometry' column from WKB hex string to Shapely geometry objects
 df_loc['port_geometry'] = df_loc['port_geometry'].apply(lambda x: wkb.loads(binascii.unhexlify(x)))
 df_loc['terminal_location'] = df_loc['terminal_location'].apply(lambda x: wkb.loads(binascii.unhexlify(x)))
 df_loc['berth_location'] = df_loc['berth_location'].apply(lambda x: wkb.loads(binascii.unhexlify(x)))
 
-# # Create a GeoDataFrame
-gdf = gpd.GeoDataFrame(df_loc, geometry='port_geometry')
+@st.cache_data(ttl="10m")
+def convert_and_create_geodataframe(df_loc):
+    gdf = gpd.GeoDataFrame(df_loc, geometry='port_geometry')
+    return gdf
 
+gdf = convert_and_create_geodataframe(df_loc)
 
 # Create a folium map centered around the first geometry
 if not gdf.empty:
@@ -193,14 +207,19 @@ if not gdf.empty:
 else:
     st.write("No data available with the selected filters.")
 
-df_main = conn.query(query_energy, ttl="10m")
+# df_main = conn.query(query_energy, ttl="10m")
+
+@st.cache_data(ttl="10m")
+def get_emission_data(query):
+    return get_data(query)
+
+df_main = get_emission_data(query_energy)
+
 col1, col2 = st.columns(2)
 with col1:
     st.title(f'Total {display_name} Vessel Visit Count - ' + str(df_main['vessel_id'].count()))
 with col2:
-    st.title(f'Unique {display_name} Vessel Visit Count - ' + str(df_main['vessel_id'].nunique()))
-    
-
+    st.title(f'Unique {display_name} Vessel Visit Count - ' + str(df_main['vessel_id'].nunique())) 
 
 st.title("Docking & Dwelling Time")
 
@@ -293,137 +312,39 @@ with col2:
 
 # CO2 Emission
 st.image("images/carbon emissions.png", caption='© Natpower Marine', use_column_width=True)
-st.title("CO2 Emission")
-co2_cold_ironing_sum_g = df_main['co2_cold_ironing_emission'].sum()
-co2_cold_ironing_mean_g = df_main['co2_cold_ironing_emission'].mean()
 
-co2_propulsion_sum_g = df_main['co2_propulsion_consumption_emission'].sum()
-co2_propulsion_mean_g = df_main['co2_propulsion_consumption_emission'].mean()
+@st.cache_data(ttl="10m")
+def calculate_emission_summary(df, emission_type):
+    st.title(f"{emission_type.upper()} Emission")
+    cold_ironing_sum = df[f'{emission_type}_cold_ironing_emission'].sum()
+    cold_ironing_mean = df[f'{emission_type}_cold_ironing_emission'].mean()
+    
+    propulsion_sum = df[f'{emission_type}_propulsion_consumption_emission'].sum()
+    propulsion_mean = df[f'{emission_type}_propulsion_consumption_emission'].mean()
+    
+    total_sum = cold_ironing_sum + propulsion_sum
+    total_mean = cold_ironing_mean + propulsion_mean
+    
+    summary_df = pd.DataFrame({
+        f'{emission_type.upper()} Cold Ironing Emission Sum': [cold_ironing_sum],
+        f'{emission_type.upper()} Cold Ironing Emission Mean': [cold_ironing_mean],
+        f'{emission_type.upper()} Propulsion Consumption Emission Sum': [propulsion_sum],
+        f'{emission_type.upper()} Propulsion Consumption Emission Mean': [propulsion_mean],
+        f'Total {emission_type.upper()} Emission Sum': [total_sum],
+        f'Total {emission_type.upper()} Emission Mean': [total_mean]
+    })
+    
+    return summary_df
 
-total_co2_sum_g = co2_cold_ironing_sum_g + co2_propulsion_sum_g
-total_co2_mean_g = co2_cold_ironing_mean_g + co2_propulsion_mean_g
+# Define the emission types you want to summarize
+emission_types = ['co2', 'so2', 'n20', 'ch4', 'nox', 'pm10']
 
-# Combine all the values into a single row DataFrame
-co2_summary_df = pd.DataFrame({
-    'CO2 Cold Ironing Emission Sum': [co2_cold_ironing_sum_g],
-    'CO2 Cold Ironing Emission Mean': [co2_cold_ironing_mean_g],
-    'CO2 Propulsion Consumption Emission Sum': [co2_propulsion_sum_g],
-    'CO2 Propulsion Consumption Emission Mean': [co2_propulsion_mean_g],
-    'Total CO2 Emission Sum': [total_co2_sum_g],
-    'Total CO2 Emission Mean': [total_co2_mean_g]
-})
-st.dataframe(co2_summary_df)
+# Loop through emission types and display summaries
+for emission_type in emission_types:
+    summary_df = calculate_emission_summary(df_main, emission_type)
+    st.dataframe(summary_df)
 
-# SO2 Emission
-st.title("SO2 Emission")
-co2_cold_ironing_sum_g = df_main['so2_cold_ironing_emission'].sum()
-co2_cold_ironing_mean_g = df_main['so2_cold_ironing_emission'].mean()
-
-co2_propulsion_sum_g = df_main['so2_propulsion_consumption_emission'].sum()
-co2_propulsion_mean_g = df_main['so2_propulsion_consumption_emission'].mean()
-
-total_co2_sum_g = co2_cold_ironing_sum_g + co2_propulsion_sum_g
-total_co2_mean_g = co2_cold_ironing_mean_g + co2_propulsion_mean_g
-
-# Combine all the values into a single row DataFrame
-co2_summary_df = pd.DataFrame({
-    'SO2 Cold Ironing Emission Sum': [co2_cold_ironing_sum_g],
-    'SO2 Cold Ironing Emission Mean': [co2_cold_ironing_mean_g],
-    'SO2 Propulsion Consumption Emission Sum': [co2_propulsion_sum_g],
-    'SO2 Propulsion Consumption Emission Mean': [co2_propulsion_mean_g],
-    'Total SO2 Emission Sum': [total_co2_sum_g],
-    'Total SO2 Emission Mean': [total_co2_mean_g]
-})
-st.dataframe(co2_summary_df)
-
-# N20 Emission
-st.title("N20 Emission")
-co2_cold_ironing_sum_g = df_main['n20_cold_ironing_emission'].sum()
-co2_cold_ironing_mean_g = df_main['n20_cold_ironing_emission'].mean()
-
-co2_propulsion_sum_g = df_main['n20_propulsion_consumption_emission'].sum()
-co2_propulsion_mean_g = df_main['n20_propulsion_consumption_emission'].mean()
-
-total_co2_sum_g = co2_cold_ironing_sum_g + co2_propulsion_sum_g
-total_co2_mean_g = co2_cold_ironing_mean_g + co2_propulsion_mean_g
-
-# Combine all the values into a single row DataFrame
-co2_summary_df = pd.DataFrame({
-    'N20 Cold Ironing Emission Sum': [co2_cold_ironing_sum_g],
-    'N20 Cold Ironing Emission Mean': [co2_cold_ironing_mean_g],
-    'N20 Propulsion Consumption Emission Sum': [co2_propulsion_sum_g],
-    'N20 Propulsion Consumption Emission Mean': [co2_propulsion_mean_g],
-    'Total N20 Emission Sum': [total_co2_sum_g],
-    'Total N20 Emission Mean': [total_co2_mean_g]
-})
-st.dataframe(co2_summary_df)
-
-# CH4 Emission
-st.title("CH4 Emission")
-co2_cold_ironing_sum_g = df_main['ch4_cold_ironing_emission'].sum()
-co2_cold_ironing_mean_g = df_main['ch4_cold_ironing_emission'].mean()
-
-co2_propulsion_sum_g = df_main['ch4_propulsion_consumption_emission'].sum()
-co2_propulsion_mean_g = df_main['ch4_propulsion_consumption_emission'].mean()
-
-total_co2_sum_g = co2_cold_ironing_sum_g + co2_propulsion_sum_g
-total_co2_mean_g = co2_cold_ironing_mean_g + co2_propulsion_mean_g
-
-# Combine all the values into a single row DataFrame
-co2_summary_df = pd.DataFrame({
-    'CH4 Cold Ironing Emission Sum': [co2_cold_ironing_sum_g],
-    'CH4 Cold Ironing Emission Mean': [co2_cold_ironing_mean_g],
-    'CH4 Propulsion Consumption Emission Sum': [co2_propulsion_sum_g],
-    'CH4 Propulsion Consumption Emission Mean': [co2_propulsion_mean_g],
-    'Total CH4 Emission Sum': [total_co2_sum_g],
-    'Total CH4 Emission Mean': [total_co2_mean_g]
-})
-st.dataframe(co2_summary_df)
-
-# NOx Emission
-st.title("NOx Emission")
-co2_cold_ironing_sum_g = df_main['nox_cold_ironing_emission'].sum()
-co2_cold_ironing_mean_g = df_main['nox_cold_ironing_emission'].mean()
-
-co2_propulsion_sum_g = df_main['nox_propulsion_consumption_emission'].sum()
-co2_propulsion_mean_g = df_main['nox_propulsion_consumption_emission'].mean()
-
-total_co2_sum_g = co2_cold_ironing_sum_g + co2_propulsion_sum_g
-total_co2_mean_g = co2_cold_ironing_mean_g + co2_propulsion_mean_g
-
-# Combine all the values into a single row DataFrame
-co2_summary_df = pd.DataFrame({
-    'NOx Cold Ironing Emission Sum': [co2_cold_ironing_sum_g],
-    'NOx Cold Ironing Emission Mean': [co2_cold_ironing_mean_g],
-    'NOx Propulsion Consumption Emission Sum': [co2_propulsion_sum_g],
-    'NOx Propulsion Consumption Emission Mean': [co2_propulsion_mean_g],
-    'Total NOx Emission Sum': [total_co2_sum_g],
-    'Total NOx Emission Mean': [total_co2_mean_g]
-})
-st.dataframe(co2_summary_df)
-
-# PM10 Emission
-st.title("PM10 Emission")
-co2_cold_ironing_sum_g = df_main['pm10_cold_ironing_emission'].sum()
-co2_cold_ironing_mean_g = df_main['pm10_cold_ironing_emission'].mean()
-
-co2_propulsion_sum_g = df_main['pm10_propulsion_consumption_emission'].sum()
-co2_propulsion_mean_g = df_main['pm10_propulsion_consumption_emission'].mean()
-
-total_co2_sum_g = co2_cold_ironing_sum_g + co2_propulsion_sum_g
-total_co2_mean_g = co2_cold_ironing_mean_g + co2_propulsion_mean_g
-
-# Combine all the values into a single row DataFrame
-co2_summary_df = pd.DataFrame({
-    'PM10 Cold Ironing Emission Sum': [co2_cold_ironing_sum_g],
-    'PM10 Cold Ironing Emission Mean': [co2_cold_ironing_mean_g],
-    'PM10 Propulsion Consumption Emission Sum': [co2_propulsion_sum_g],
-    'PM10 Propulsion Consumption Emission Mean': [co2_propulsion_mean_g],
-    'Total PM10 Emission Sum': [total_co2_sum_g],
-    'Total PM10 Emission Mean': [total_co2_mean_g]
-})
-st.dataframe(co2_summary_df)
-
+# Display the main DataFrame at the end
 st.title(f"{display_name} Detail")
 st.dataframe(df_main)
 
@@ -433,26 +354,33 @@ elif st.session_state.terminal_level:
     columns_to_remove = ['vessel_id', 'terminal_id']
 elif st.session_state.berth_level:
     columns_to_remove = ['vessel_id', 'berth_id']
-df_filtered = df_main.drop(columns=columns_to_remove)
 
-# Identify numerical columns
-numerical_cols = df_filtered.select_dtypes(include=['number']).columns
+@st.cache_data(ttl="10m")
+def process_and_group_data(df, columns_to_remove):
+    # Remove specified columns
+    df_filtered = df.drop(columns=columns_to_remove)
 
-# Define aggregation functions
-agg_funcs = {
-    col: ['sum', 'mean'] for col in numerical_cols
-}
+    # Identify numerical columns
+    numerical_cols = df_filtered.select_dtypes(include=['number']).columns
 
-# Group by 'new_vessel_category' and apply aggregations
-grouped_df = df_main.groupby('new_vessel_category').agg(agg_funcs).reset_index()
+    # Define aggregation functions
+    agg_funcs = {col: ['sum', 'mean'] for col in numerical_cols}
 
-# Flatten the MultiIndex columns
-grouped_df.columns = ['_'.join(col).strip() for col in grouped_df.columns.values]
+    # Group by 'new_vessel_category' and apply aggregations
+    grouped_df = df.groupby('new_vessel_category').agg(agg_funcs).reset_index()
+
+    # Flatten the MultiIndex columns
+    grouped_df.columns = ['_'.join(col).strip() for col in grouped_df.columns.values]
+
+    return grouped_df
+
+grouped_df = process_and_group_data(df_main, columns_to_remove)
 
 st.dataframe(grouped_df)
 
 
 # Define time classification function
+@st.cache_data(ttl="10m")
 def classify_time(dt):
     if 5 <= dt.hour < 12:
         return 'Morning'
@@ -463,22 +391,29 @@ def classify_time(dt):
     else:
         return 'Night'
 
-# Apply classification
-df_main['arrival_time_of_day'] = df_main[f'min_{display_name.lower()}_arrival'].apply(classify_time)
+@st.cache_data(ttl="10m")
+def process_docking_times(df, display_name):
+    # Apply classification
+    df['arrival_time_of_day'] = df[f'min_{display_name.lower()}_arrival'].apply(classify_time)
 
-# Order for time of day
-time_order = ['Morning', 'Afternoon', 'Evening', 'Night']
+    # Order for time of day
+    time_order = ['Morning', 'Afternoon', 'Evening', 'Night']
 
-# Aggregate docking times
-arrival_docking_times = df_main.groupby(['new_vessel_category', 'arrival_time_of_day'])['berth_docking_time_hr'].sum().unstack(fill_value=0)
+    # Aggregate docking times
+    arrival_docking_times = df.groupby(['new_vessel_category', 'arrival_time_of_day'])['berth_docking_time_hr'].sum().unstack(fill_value=0)
 
-# Ensure time of day and vessel category order
-arrival_docking_times = arrival_docking_times.reindex(columns=time_order).fillna(0)
+    # Ensure time of day and vessel category order
+    arrival_docking_times = arrival_docking_times.reindex(columns=time_order).fillna(0)
 
-# Order vessel categories by total docking time
-arrival_totals = arrival_docking_times.sum(axis=1).sort_values(ascending=False)
+    # Order vessel categories by total docking time
+    arrival_totals = arrival_docking_times.sum(axis=1).sort_values(ascending=False)
 
-arrival_docking_times = arrival_docking_times.loc[arrival_totals.index]
+    arrival_docking_times = arrival_docking_times.loc[arrival_totals.index]
+
+    return arrival_docking_times
+
+# Example usage in Streamlit
+arrival_docking_times = process_docking_times(df_main, display_name)
 
 # Streamlit app
 st.title('Docking Times Analysis')
@@ -570,47 +505,70 @@ with col4:
     st.dataframe(pivot_df)
     st.line_chart(pivot_df)
 
-df_extracted = df_main
-df_extracted['key'] = 1
-df['key'] = 1
+@st.cache_data(ttl="10m")
+def preprocess_and_forecast(df_extracted, df):
+    # Extract and prepare data
+    df_extracted['key'] = 1
+    df['key'] = 1
+    
+    # Merge dataframes
+    merged_df = pd.merge(df_extracted, df, on='key').drop('key', axis=1)
+    
+    try:
+        # Prepare traffic data
+        traffic = df[df['type'] == 'Traffic Forecast'].copy()
+        traffic['traffic'] = traffic['change_in_percentage']
+        traffic = traffic[['traffic', 'year_val']]
+        
+        # Merge traffic data
+        merged_df = pd.merge(merged_df, traffic, on='year_val')
 
-merged_df = pd.merge(df_extracted, df, on='key').drop('key', axis=1)
-try:
-    traffic = df[df['type'] == 'Traffic Forecast']
-    traffic = traffic.copy()
-    traffic['traffic'] = traffic['change_in_percentage']
-    traffic= traffic[['traffic','year_val']]
+        # Calculate new values
+        merged_df['new_cold_ironing_mw_vessel'] = merged_df['cold_ironing_mw'] * ((1 + merged_df['traffic']) / 100)
+        merged_df['change_cold_ironing_mw_vessel'] = (merged_df['change_in_percentage'] / 100) * (
+            merged_df['cold_ironing_mw'] * ((1 + merged_df['traffic']) / 100))
+        merged_df['new_propulsion_consumption'] = merged_df['propulsion_consumption_mw'] * (1 + merged_df['traffic'] / 100)
+        merged_df['change_propulsion_consumption'] = (merged_df['change_in_percentage'] / 100) * (
+            merged_df['propulsion_consumption_mw'] * ((1 + merged_df['traffic']) / 100))
 
-    merged_df = pd.merge(merged_df, traffic, on='year_val')
+        merged_df['year'] = merged_df['year_val']
+        merged_df.set_index('year', inplace=True)
 
-    merged_df['new_cold_ironing_mw_vessel'] = merged_df['cold_ironing_mw'] * ((1 + merged_df['traffic'])/100 )
-    merged_df['change_cold_ironing_mw_vessel'] = (merged_df['change_in_percentage']/100) * ( merged_df['cold_ironing_mw'] * ((1 + merged_df['traffic'])/100 ))
-    merged_df['new_propulsion_consumption'] = merged_df['propulsion_consumption_mw'] * (1 + merged_df['traffic']/100 )
-    merged_df['change_propulsion_consumption'] = (merged_df['change_in_percentage']/100) * ( merged_df['propulsion_consumption_mw'] * ((1 + merged_df['traffic'])/100 ))
+        return merged_df
+    except Exception as e:
+        st.write("No data available for future forecast")
+        st.write(str(e))
+        return pd.DataFrame()  # Return empty DataFrame if there's an error
 
-    merged_df['year'] = merged_df['year_val']
-    merged_df.set_index('year', inplace=True)
+@st.cache_data(ttl="10m")
+def plot_forecasts(merged_df):
+    try:
+        # Plot Cold Ironing forecast
+        st.write("Cold Ironing - Future Forecast")
+        pivot_df = merged_df[merged_df['type'] == 'Cold Ironing'].pivot_table(
+            index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+        st.line_chart(pivot_df)
 
-    # st.dataframe(merged_df)
+        # Plot Propulsion Adoption forecast
+        st.write("Propulsion Adoption - Future Forecast")
+        pivot_df = merged_df[merged_df['type'] == 'Propulsion Adoption'].pivot_table(
+            index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+        st.line_chart(pivot_df)
 
-    st.write("Cold Ironing - Future Forecast")
-    pivot_df =merged_df[merged_df['type'] == 'Cold Ironing'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
-    # st.dataframe(pivot_df)
-    st.line_chart(pivot_df)
+        # Plot Propulsion Distance forecast
+        st.write("Propulsion Distance - Future Forecast")
+        pivot_df = merged_df[merged_df['type'] == 'Propulsion Distance'].pivot_table(
+            index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+        st.line_chart(pivot_df)
 
-    st.write("Propulsion Adoption - Future Forecast")
-    pivot_df =merged_df[merged_df['type'] == 'Propulsion Adoption'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
-    # st.dataframe(pivot_df)
-    st.line_chart(pivot_df)
+        # Plot Traffic Forecast
+        st.write("Traffic Forecast - Future Forecast")
+        pivot_df = merged_df[merged_df['type'] == 'Traffic Forecast'].pivot_table(
+            index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
+        st.line_chart(pivot_df)
+    except Exception as e:
+        st.write("Error generating plots")
+        st.write(str(e))
 
-    st.write("Propulsion Distance - Future Forecast")
-    pivot_df =merged_df[merged_df['type'] == 'Propulsion Distance'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
-    # st.dataframe(pivot_df)
-    st.line_chart(pivot_df)
-
-    st.write("Traffic Forecast - Future Forecast")
-    pivot_df =merged_df[merged_df['type'] == 'Traffic Forecast'].pivot_table(index='year_val', columns='change_type', values='change_cold_ironing_mw_vessel', aggfunc='sum')
-    # st.dataframe(pivot_df)
-    st.line_chart(pivot_df)
-except:
-    st.write("No data available for future forecast")
+merged_df = preprocess_and_forecast(df_main, df)
+plot_forecasts(merged_df)

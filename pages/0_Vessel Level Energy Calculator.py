@@ -15,8 +15,18 @@ st.image("images/LinkedIn Header - NatPower Marine.png", caption='© Natpower Ma
 
 st.sidebar.image("images/natpowermarine.png", caption='© Natpower Marine', use_column_width=True)
 
-conn = st.connection("postgresql", type="sql")
-df = conn.query("select distinct vessel_category FROM reference.ref_vessel_type_category;", ttl="10m")
+# Cached database connection and query execution
+@st.cache_resource(ttl="10m")
+def get_connection():
+    return st.connection("postgresql", type="sql")
+
+@st.cache_data(ttl="10m")
+def get_data(queryval):
+    return conn.query(queryval)
+
+conn = get_connection()
+queryval = "select distinct vessel_category FROM reference.ref_vessel_type_category;"
+df = get_data(queryval)
 
 # Sidebar filters
 st.sidebar.title("Vessel Types - Verticals")
@@ -29,8 +39,16 @@ else:
     vessel_index = 0 
 
 vessel_options =  st.sidebar.selectbox("Vessel Category", options=vessel_cat_list,index=vessel_index)
-df_cold = conn.query(f"select * FROM public.ref_cold_ironing where  vessel_category = '{vessel_options}';", ttl="10m")
+
+queryval = f"select * FROM public.ref_cold_ironing where  vessel_category = '{vessel_options}';"
+df_cold = get_data(queryval)
 df_cold['min_gt'] = pd.to_numeric(df_cold['min_gt'], errors='coerce')
+
+
+# Propulsion 
+queryval = f"select * FROM public.ref_vessel_propulsion_consumption where  vessel_category = '{vessel_options}';"
+df_prop = get_data(queryval)
+df_prop['min_dwt'] = pd.to_numeric(df_prop['min_dwt'], errors='coerce')
 
 st.title('Energy Calculator')
 maincol1,maincol2 = st.columns(2)
@@ -45,9 +63,6 @@ with  maincol1:
 
 with maincol2:
     st.title('Propulsion Consumption MW')
-    # Propulsion 
-    df_prop = conn.query(f"select * FROM public.ref_vessel_propulsion_consumption where  vessel_category = '{vessel_options}';", ttl="10m")
-    df_prop['min_dwt'] = pd.to_numeric(df_prop['min_dwt'], errors='coerce')
     col1,col2 = st.columns(2)
     with col1:
         min_dwt = int(st.number_input("Dead Weight Tonnage",value = 14001))
@@ -102,6 +117,7 @@ with col2:
     port_dock_time = int(st.number_input("Berth Docking Time",value = 45))
 
 # Generate default data
+@st.cache_data(ttl="10m")
 def generate_default_data(num_vessels, num_terminals, num_berths, port_dwell_time,port_dock_time):
     data = []
     index = 1
@@ -154,6 +170,7 @@ if 'default_df' not in st.session_state:
     st.session_state.default_df = default_df
 
 # Function to update the values based on edits
+@st.cache_data(ttl="10m")
 def change_val():
     st.session_state.default_df = default_df
     st.session_state.edited_df = edited_df
@@ -173,6 +190,7 @@ st.title('Editable DataFrame')
 edited_df = st.data_editor(st.session_state.default_df, use_container_width=True)
 
 # Function to highlight changes
+@st.cache_data(ttl="10m")
 def highlight_changes(val):
     original_val = st.session_state.default_df.loc[val.name, val.index]
     return ['background-color: yellow' if val[col] != original_val[col] else '' for col in val.index]
@@ -193,6 +211,7 @@ change_val()
 # st.write(st.session_state.edited_df)
 
 # Function to highlight changes
+@st.cache_data(ttl="10m")
 def highlight_changes(val):
     original_val = st.session_state.default_df.loc[val.name, val.index]
     return ['background-color: yellow' if val[col] != original_val[col] else '' for col in val.index]
@@ -286,12 +305,12 @@ with col2:
     st.write("Selected Auxiliary Value:", selected_auxiliary_value if selected_auxiliary_value is not None else "None")
     st.write("Selected Propulsion Value:", selected_propulsion_value if selected_propulsion_value is not None else "None")
 
-
+@st.cache_data(ttl="10m")
 def co2_change_val():
     # Add code here to display the records
     print('x')
    
-
+@st.cache_data(ttl="10m")
 def highlight_changes_co2(val):
     original_val = st.session_state.emission_df.loc[val.name, val.index]
     return ['background-color: yellow' if val[col] != original_val[col] else '' for col in val.index]
