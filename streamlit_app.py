@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, text
 # Set the title and favicon that appear in the Browser's tab bar.
 
 st.set_page_config(
-    page_title='MARINE dashboard',
+    page_title='Natpower Marine',
     page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
     layout='wide',
 )
@@ -17,19 +17,26 @@ st.image("images/LinkedIn Header - NatPower Marine.png", caption='© Natpower Ma
 st.sidebar.image("images/natpowermarine.png", caption='© Natpower Marine', use_column_width=True)
 
 # Initialize connection.
-conn = st.connection("postgresql", type="sql")
+@st.cache_resource(ttl="10m")
+def get_connection():
+    return st.connection("postgresql", type="sql")
+conn = get_connection()
+
+@st.cache_data(ttl="10m")
+def get_data(queryval):
+    return conn.query(queryval)
 
 # Perform query.
-df = conn.query("select count(vessel_id) from public.core_vessel;", ttl="10m")
+df = get_data("select count(vessel_id) from public.core_vessel;")
 st.write(f"Total Number of Vessel Counts - {df['count'][0]} ")
 
 col1, col2 = st.columns(2)
 with col1:
-    df = conn.query("select new_vessel_category as vessel_category,count(new_vessel_category) as Counts from reporting.mview_vessel_details group by new_vessel_category order by counts desc;", ttl="10m")
+    df = get_data("select new_vessel_category as vessel_category,count(new_vessel_category) as Counts from reporting.mview_vessel_details group by new_vessel_category order by counts desc;")
     st.write('Vessel Details - ')
     st.dataframe(df)
 with col2:
-    df = conn.query("select type as Place_Type, count(type) as Counts from reporting.mview_geometry_port_term_berth group by type order by counts desc;;", ttl="10m")
+    df = get_data("select type as Place_Type, count(type) as Counts from reporting.mview_geometry_port_term_berth group by type order by counts desc;;")
     st.write('Total Number of Places Counts - ')
     st.dataframe(df)
 

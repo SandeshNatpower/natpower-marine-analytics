@@ -17,7 +17,13 @@ pd.options.mode.chained_assignment = None  # default='warn'
 
 
 # Sample DataFrame (already provided)
-st.set_page_config(layout="wide")
+
+st.set_page_config(
+    page_title='Natpower - Energy & Emission',
+    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    layout='wide',
+)
+
 st.image("images/LinkedIn Header - NatPower Marine.png", caption='© Natpower Marine', use_column_width=True)
 
 st.sidebar.image("images/natpowermarine.png", caption='© Natpower Marine', use_column_width=True)
@@ -30,6 +36,7 @@ def get_connection():
 @st.cache_data(ttl="10m")
 def get_data(queryval):
     return conn.query(queryval)
+
 
 conn = get_connection()
 
@@ -469,7 +476,7 @@ categories = df_main['new_vessel_category'].unique()
 # Format categories for SQL query
 formatted_categories = ",".join([f"'{cat}'" for cat in categories])
 
-df = conn.query(f"SELECT * FROM public.ref_future_power_consumption where year between 2024 and 2070 and change_type in('Low','Medium','High',{formatted_categories});", ttl="10m")
+df = get_data(f"SELECT * FROM public.ref_future_power_consumption where year between 2024 and 2070 and change_type in('Low','Medium','High',{formatted_categories});")
 df['year'] = pd.to_datetime(df['year'], format='%Y')
 df['year_val'] = df['year']
 df.set_index('year', inplace=True)

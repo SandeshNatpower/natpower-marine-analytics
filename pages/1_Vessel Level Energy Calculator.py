@@ -24,6 +24,7 @@ def get_connection():
 def get_data(queryval):
     return conn.query(queryval)
 
+
 conn = get_connection()
 queryval = "select distinct vessel_category FROM reference.ref_vessel_type_category;"
 df = get_data(queryval)
