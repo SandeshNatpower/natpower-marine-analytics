@@ -244,67 +244,237 @@ st.dataframe(result_df)
 
 # Emission
 st.title('Emission Calculator')
-df = get_data(f"SELECT engine_group, pollutant_name, fuel_type, engine_type, emission_factor_formula, values_g_per_kwh FROM reporting.ref_emission_factors where pollutant_name = 'CO2';")
+# df = get_data(f"SELECT engine_group, pollutant_name, fuel_type, engine_type, emission_factor_formula, values_g_per_kwh FROM reporting.ref_emission_factors where pollutant_name = 'CO2';")
+df = get_data(f"SELECT engine_group, pollutant_name, fuel_type, engine_type, emission_factor_formula, values_g_per_kwh FROM reporting.ref_emission_factors;")
 df['Selection'] = False
 
-auxiliary_selected = False
-propulsion_selected = False
-for index, row in df.iterrows():
-    if row['engine_group'] == 'Auxiliary' and not auxiliary_selected:
-        df.at[index, 'Selection'] = True
-        auxiliary_selected = True  # Mark auxiliary as selected
-    elif row['engine_group'] == 'Propulsion'and not propulsion_selected:
-        propulsion_selected = True
-        df.at[index, 'Selection'] = True
+# # Initialize session state for tracking previous Auxiliary and Propulsion indices for all pollutants
+# pollutants = ['CO2', 'SO2', 'CH4', 'NOx', 'PM10']
+# print(df['pollutant_name'].unique())
+# if 'pollutant_state' not in st.session_state:
+#     st.session_state.pollutant_state = {pollutant: {'prev_auxiliary_idx': None, 'prev_propulsion_idx': None} for pollutant in pollutants}
 
-# Initialize session state
-if 'prev_auxiliary_idx' not in st.session_state:
-    st.session_state.prev_auxiliary_idx = None
-if 'prev_propulsion_idx' not in st.session_state:
-    st.session_state.prev_propulsion_idx = None
-
-col1, col2 = st.columns(2)
-with col1:
-    if 'prev_auxiliary_idx' not in st.session_state:
-        st.session_state.prev_auxiliary_idx = None
-        
-    emission_df = st.data_editor(df,disabled=('engine_group', 'pollutant_name', 'fuel_type', 'engine_type', 'emission_factor_formula'))
-    st.session_state.emission_df = emission_df
+# # Auxiliary & Propulsion selection logic for each pollutant
+# def update_selection(df, pollutant):
+#     auxiliary_selected = False
+#     propulsion_selected = False
     
-with col2:
-   # Initialize selection variables
-    selected_auxiliary_value = None
-    selected_propulsion_value = None
+#     for index, row in df.iterrows():
+#         if row['engine_group'] == 'Auxiliary' and row['pollutant_name'] == pollutant and not auxiliary_selected:
+#             df.at[index, 'Selection'] = True
+#             auxiliary_selected = True  # Mark auxiliary as selected
+#         elif row['engine_group'] == 'Propulsion' and row['pollutant_name'] == pollutant and not propulsion_selected:
+#             propulsion_selected = True
+#             df.at[index, 'Selection'] = True
+#     return df
 
-    # Check if any Auxiliary is selected
-    aux_selection = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Auxiliary')]
-    if not aux_selection.empty:
-        selected_auxiliary_value = aux_selection['values_g_per_kwh'].iloc[0]
-        current_auxiliary_idx = aux_selection.index[0]
+# # Display pollutant details for Auxiliary and Propulsion
+# def display_pollutant_values(df, pollutant):
+#     col1, col2 = st.columns(2)
+    
+#     with col1:
+#         emission_df = st.data_editor(
+#             df, disabled=('engine_group', 'pollutant_name', 'fuel_type', 'engine_type', 'emission_factor_formula'))
+#         st.session_state.emission_df = emission_df
+    
+#     with col2:
+#         selected_auxiliary_value = None
+#         selected_propulsion_value = None
 
-        # Unselect the previous Auxiliary if a new one is selected
-        if st.session_state.prev_auxiliary_idx is not None and st.session_state.prev_auxiliary_idx != current_auxiliary_idx:
-            emission_df.at[st.session_state.prev_auxiliary_idx, 'Selection'] = False
+#         # Auxiliary selection handling
+#         aux_selection = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Auxiliary') & (emission_df['pollutant_name'] == pollutant)]
+#         if not aux_selection.empty:
+#             selected_auxiliary_value = aux_selection['values_g_per_kwh'].iloc[0]
+#             current_auxiliary_idx = aux_selection.index[0]
 
-        # Update session state for Auxiliary
-        st.session_state.prev_auxiliary_idx = current_auxiliary_idx
+#             # Unselect the previous Auxiliary if a new one is selected
+#             if st.session_state.pollutant_state[pollutant]['prev_auxiliary_idx'] is not None and st.session_state.pollutant_state[pollutant]['prev_auxiliary_idx'] != current_auxiliary_idx:
+#                 emission_df.at[st.session_state.pollutant_state[pollutant]['prev_auxiliary_idx'], 'Selection'] = False
 
-    # Check if any Propulsion is selected
-    prop_selection = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Propulsion')]
-    if not prop_selection.empty:
-        selected_propulsion_value = prop_selection['values_g_per_kwh'].iloc[0]
-        current_propulsion_idx = prop_selection.index[0]
+#             # Update session state for Auxiliary
+#             st.session_state.pollutant_state[pollutant]['prev_auxiliary_idx'] = current_auxiliary_idx
 
-        # Unselect the previous Propulsion if a new one is selected
-        if st.session_state.prev_propulsion_idx is not None and st.session_state.prev_propulsion_idx != current_propulsion_idx:
-            emission_df.at[st.session_state.prev_propulsion_idx, 'Selection'] = False
+#         # Propulsion selection handling
+#         prop_selection = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Propulsion') & (emission_df['pollutant_name'] == pollutant)]
+#         if not prop_selection.empty:
+#             selected_propulsion_value = prop_selection['values_g_per_kwh'].iloc[0]
+#             current_propulsion_idx = prop_selection.index[0]
 
-        # Update session state for Propulsion
-        st.session_state.prev_propulsion_idx = current_propulsion_idx
+#             # Unselect the previous Propulsion if a new one is selected
+#             if st.session_state.pollutant_state[pollutant]['prev_propulsion_idx'] is not None and st.session_state.pollutant_state[pollutant]['prev_propulsion_idx'] != current_propulsion_idx:
+#                 emission_df.at[st.session_state.pollutant_state[pollutant]['prev_propulsion_idx'], 'Selection'] = False
 
-    # Display selected values
-    st.write("Selected Auxiliary Value:", selected_auxiliary_value if selected_auxiliary_value is not None else "None")
-    st.write("Selected Propulsion Value:", selected_propulsion_value if selected_propulsion_value is not None else "None")
+#             # Update session state for Propulsion
+#             st.session_state.pollutant_state[pollutant]['prev_propulsion_idx'] = current_propulsion_idx
+
+#         # Display selected values
+#         st.title(f'{pollutant} Emission')
+#         st.write("Selected Auxiliary Value:", selected_auxiliary_value if selected_auxiliary_value is not None else "None")
+#         st.write("Selected Propulsion Value:", selected_propulsion_value if selected_propulsion_value is not None else "None")
+
+# # Process and display each pollutant
+# for pollutant in pollutants:
+#     st.write(pollutant)
+#     try:
+#         df_filtered = df[df['pollutant_name'] == pollutant].copy()  # Filter dataframe for the specific pollutant
+#         df_filtered = update_selection(df_filtered, pollutant)  # Update selection for auxiliary and propulsion
+#         display_pollutant_values(df_filtered, pollutant)  # Display the values
+#     except:
+#         st.write("No data available for this pollutant")  # Display a message if no data
+
+
+# Initialize session state for tracking previous Auxiliary and Propulsion indices for all pollutants
+pollutants = ['CO2', 'SO2', 'CH4', 'NOx', 'PM10']
+if 'pollutant_state' not in st.session_state:
+    st.session_state.pollutant_state = {pollutant: {'prev_auxiliary_idx': None, 'prev_propulsion_idx': None} for pollutant in pollutants}
+
+# Auxiliary & Propulsion selection logic for each pollutant
+def update_selection(df, pollutant):
+    auxiliary_selected = False
+    propulsion_selected = False
+    
+    for index, row in df.iterrows():
+        if row['engine_group'] == 'Auxiliary' and row['pollutant_name'] == pollutant and not auxiliary_selected:
+            df.at[index, 'Selection'] = True
+            auxiliary_selected = True  # Mark auxiliary as selected
+        elif row['engine_group'] == 'Propulsion' and row['pollutant_name'] == pollutant and not propulsion_selected:
+            df.at[index, 'Selection'] = True
+            propulsion_selected = True
+    return df
+
+# Display pollutant details for Auxiliary and Propulsion
+def display_pollutant_values(df, pollutant):
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        emission_df = st.data_editor(
+            df, disabled=('engine_group', 'pollutant_name', 'fuel_type', 'engine_type', 'emission_factor_formula'))
+        st.session_state.emission_df = emission_df
+    
+    with col2:
+        selected_auxiliary_value = None
+        selected_propulsion_value = None
+
+        # Auxiliary selection handling
+        aux_selection = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Auxiliary') & (emission_df['pollutant_name'] == pollutant)]
+        if not aux_selection.empty:
+            selected_auxiliary_value = aux_selection['values_g_per_kwh'].iloc[0]
+            current_auxiliary_idx = aux_selection.index[0]
+
+            # Unselect the previous Auxiliary if a new one is selected
+            if st.session_state.pollutant_state[pollutant]['prev_auxiliary_idx'] is not None and st.session_state.pollutant_state[pollutant]['prev_auxiliary_idx'] != current_auxiliary_idx:
+                emission_df.at[st.session_state.pollutant_state[pollutant]['prev_auxiliary_idx'], 'Selection'] = False
+
+            # Update session state for Auxiliary
+            st.session_state.pollutant_state[pollutant]['prev_auxiliary_idx'] = current_auxiliary_idx
+
+        # Propulsion selection handling
+        prop_selection = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Propulsion') & (emission_df['pollutant_name'] == pollutant)]
+        if not prop_selection.empty:
+            selected_propulsion_value = prop_selection['values_g_per_kwh'].iloc[0]
+            current_propulsion_idx = prop_selection.index[0]
+
+            # Unselect the previous Propulsion if a new one is selected
+            if st.session_state.pollutant_state[pollutant]['prev_propulsion_idx'] is not None and st.session_state.pollutant_state[pollutant]['prev_propulsion_idx'] != current_propulsion_idx:
+                emission_df.at[st.session_state.pollutant_state[pollutant]['prev_propulsion_idx'], 'Selection'] = False
+
+            # Update session state for Propulsion
+            st.session_state.pollutant_state[pollutant]['prev_propulsion_idx'] = current_propulsion_idx
+
+        # Display selected values
+        st.title(f'{pollutant} Emission')
+        st.write("Selected Auxiliary Value:", selected_auxiliary_value if selected_auxiliary_value is not None else "None")
+        st.write("Selected Propulsion Value:", selected_propulsion_value if selected_propulsion_value is not None else "None")
+
+    return selected_auxiliary_value, selected_propulsion_value
+
+# Process and display each pollutant, and compute emissions
+pollutant_emissions = {}
+
+for pollutant in pollutants:
+    df_filtered = df[df['pollutant_name'] == pollutant].copy()  # Filter dataframe for the specific pollutant
+    df_filtered = update_selection(df_filtered, pollutant)  # Update selection for auxiliary and propulsion
+    
+    selected_auxiliary_value, selected_propulsion_value = display_pollutant_values(df_filtered, pollutant)  # Display the values
+    
+    if selected_auxiliary_value is not None and selected_propulsion_value is not None:
+        # st.dataframe(new_df)
+        # Calculate emissions based on selections and store them
+        pollutant_emissions[f'{pollutant}_cold_ironing_emission'] = new_df['average_hoteling_MW/h'] * selected_auxiliary_value
+        pollutant_emissions[f'{pollutant}_propulsion_emission'] = new_df['propulsion_consumption_mw/h'] * selected_propulsion_value
+        pollutant_emissions[f'Total_{pollutant}_propulsion_emission'] = pollutant_emissions[f'{pollutant}_cold_ironing_emission']  +  pollutant_emissions[f'{pollutant}_propulsion_emission']
+
+
+# Add pollutant emissions to the DataFrame
+for pollutant, emission_values in pollutant_emissions.items():
+    new_df[pollutant] = emission_values
+
+st.title('Emission Calculations')
+# Display the final DataFrame with calculated emissions
+st.dataframe(new_df)
+
+
+
+
+# auxiliary_selected = False
+# propulsion_selected = False
+# for index, row in df.iterrows():
+#     if row['engine_group'] == 'Auxiliary' and not auxiliary_selected:
+#         df.at[index, 'Selection'] = True
+#         auxiliary_selected = True  # Mark auxiliary as selected
+#     elif row['engine_group'] == 'Propulsion'and not propulsion_selected:
+#         propulsion_selected = True
+#         df.at[index, 'Selection'] = True
+
+# # Initialize session state
+# if 'prev_auxiliary_idx' not in st.session_state:
+#     st.session_state.prev_auxiliary_idx = None
+# if 'prev_propulsion_idx' not in st.session_state:
+#     st.session_state.prev_propulsion_idx = None
+
+# col1, col2 = st.columns(2)
+# with col1:
+#     if 'prev_auxiliary_idx' not in st.session_state:
+#         st.session_state.prev_auxiliary_idx = None
+        
+#     emission_df = st.data_editor(df,disabled=('engine_group', 'pollutant_name', 'fuel_type', 'engine_type', 'emission_factor_formula'))
+#     st.session_state.emission_df = emission_df
+    
+# with col2:
+#    # Initialize selection variables
+#     selected_auxiliary_value = None
+#     selected_propulsion_value = None
+
+#     # Check if any Auxiliary is selected
+#     aux_selection = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Auxiliary')]
+#     if not aux_selection.empty:
+#         selected_auxiliary_value = aux_selection['values_g_per_kwh'].iloc[0]
+#         current_auxiliary_idx = aux_selection.index[0]
+
+#         # Unselect the previous Auxiliary if a new one is selected
+#         if st.session_state.prev_auxiliary_idx is not None and st.session_state.prev_auxiliary_idx != current_auxiliary_idx:
+#             emission_df.at[st.session_state.prev_auxiliary_idx, 'Selection'] = False
+
+#         # Update session state for Auxiliary
+#         st.session_state.prev_auxiliary_idx = current_auxiliary_idx
+
+#     # Check if any Propulsion is selected
+#     prop_selection = emission_df[(emission_df['Selection'] == True) & (emission_df['engine_group'] == 'Propulsion')]
+#     if not prop_selection.empty:
+#         selected_propulsion_value = prop_selection['values_g_per_kwh'].iloc[0]
+#         current_propulsion_idx = prop_selection.index[0]
+
+#         # Unselect the previous Propulsion if a new one is selected
+#         if st.session_state.prev_propulsion_idx is not None and st.session_state.prev_propulsion_idx != current_propulsion_idx:
+#             emission_df.at[st.session_state.prev_propulsion_idx, 'Selection'] = False
+
+#         # Update session state for Propulsion
+#         st.session_state.prev_propulsion_idx = current_propulsion_idx
+
+#     # Display selected values
+#     st.title('CO2')
+#     st.write("Selected Auxiliary Value:", selected_auxiliary_value if selected_auxiliary_value is not None else "None")
+#     st.write("Selected Propulsion Value:", selected_propulsion_value if selected_propulsion_value is not None else "None")
 
 @st.cache_data(ttl="10m")
 def co2_change_val():
