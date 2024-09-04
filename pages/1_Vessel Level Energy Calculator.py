@@ -244,7 +244,7 @@ st.dataframe(result_df)
 
 # Emission
 st.title('Emission Calculator')
-df = conn.query(f"SELECT engine_group, pollutant_name, fuel_type, engine_type, emission_factor_formula, values_g_per_kwh FROM reporting.ref_emission_factors where pollutant_name = 'CO2';", ttl="10m")
+df = get_data(f"SELECT engine_group, pollutant_name, fuel_type, engine_type, emission_factor_formula, values_g_per_kwh FROM reporting.ref_emission_factors where pollutant_name = 'CO2';")
 df['Selection'] = False
 
 auxiliary_selected = False
@@ -329,10 +329,10 @@ with col1:
 with col2:
     end_year = int(st.number_input("Future End Yeat",value = 2070))
 
-df = conn.query(f"select distinct main_vessel_category FROM reference.ref_vessel_type_category where vessel_category = '{vessel_options}';", ttl="10m")
+df = get_data(f"select distinct main_vessel_category FROM reference.ref_vessel_type_category where vessel_category = '{vessel_options}';")
 main_vessel_category = df['main_vessel_category'].iloc[0]
 
-df = conn.query(f"SELECT * FROM public.ref_future_power_consumption where year between {start_year} and {end_year} and change_type in('Low','Medium','High','{main_vessel_category}');", ttl="10m")
+df = get_data(f"SELECT * FROM public.ref_future_power_consumption where year between {start_year} and {end_year} and change_type in('Low','Medium','High','{main_vessel_category}');")
 df['year'] = pd.to_datetime(df['year'], format='%Y')
 df['year_val'] = df['year']
 df.set_index('year', inplace=True)

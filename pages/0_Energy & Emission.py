@@ -13,11 +13,45 @@ from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
 import tempfile
+import logging
+import os
+import psutil
+
+# Function to check available memory and CPU
+def check_system_resources():
+    memory_info = psutil.virtual_memory()
+    available_memory = memory_info.available / (1024 ** 3)  # Convert to GB
+    cpu_usage = psutil.cpu_percent(interval=1)
+
+    st.sidebar.write(f"Available Memory: {available_memory:.2f} GB")
+    st.sidebar.write(f"CPU Usage: {cpu_usage:.2f}%")
+
+    if available_memory < 1.0:
+        st.warning("Low memory, consider optimizing the code or upgrading the server.")
+    if cpu_usage > 80:
+        st.warning("High CPU usage detected, consider optimizing your operations.")
+
+
 pd.options.mode.chained_assignment = None  # default='warn'
 
+# Verify required packages
+required_packages = [
+    'streamlit', 'geopandas', 'shapely', 'folium', 'streamlit_folium',
+    'binascii', 'pandas', 'matplotlib', 'seaborn', 'fpdf', 'PIL'
+]
+missing_packages = []
+for package in required_packages:
+    try:
+        __import__(package)
+    except ImportError:
+        missing_packages.append(package)
+
+if missing_packages:
+    st.error(f"Missing packages: {', '.join(missing_packages)}")
+    st.stop()
 
 # Sample DataFrame (already provided)
-
+pd.options.mode.chained_assignment = None  # default='warn'
 st.set_page_config(
     page_title='Natpower - Energy & Emission',
     page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
@@ -31,7 +65,12 @@ st.sidebar.image("images/natpowermarine.png", caption='© Natpower Marine', use_
 # Cached database connection and query execution
 @st.cache_resource(ttl="10m")
 def get_connection():
-    return st.connection("postgresql", type="sql")
+    try:
+        connection = st.connection("postgresql", type="sql")
+        return connection
+    except Exception as e:
+        st.error("Failed to establish database connection.")
+        st.stop()
 
 @st.cache_data(ttl="10m")
 def get_data(queryval):
